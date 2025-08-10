@@ -1,0 +1,168 @@
+// app/api/remote-asr/route.ts
+export const dynamic = "force-dynamic"
+import { NextResponse } from "next/server"
+
+// Health probe: 200 if configured, 503 if not
+export async function OPTIONS() {
+const configured = Boolean(process.env.OPENAI_API_KEY || (process.env as any).apikey)
+return new NextResponse(null, { status: configured ? 200 : 503 })
+}
+
+/**
+* POST /api/remote-asr?lang=en
+* Body: binary audio (audio/webm;codecs=opus) chunk from MediaRecorder
+* Returns: { ok: true, text: string }
+*/
+export async function POST(req: Request) {
+const OPENAI_KEY = process.env.OPENAI_API_KEY || (process.env as any).apikey
+if (!OPENAI_KEY) {
+  return NextResponse.json(
+    { ok: false, error: "OPENAI_API_KEY not set (APIKEY also supported); remote ASR disabled." },
+    { status: 501 },
+  )
+}
+try {
+  const { searchParams } = new URL(req.url)
+  const lang = searchParams.get("lang") || undefined
+
+  const ab = await req.arrayBuffer()
+  if (!ab || ab.byteLength === 0) {
+    return NextResponse.json({ ok: false, error: "No audio received" }, { status: 400 })
+  }
+
+  const form = new FormData()
+  form.set("model", "gpt-4o-mini-transcribe")
+  if (lang) form.set("language", lang)
+  const file = new File([ab], "remote-audio.webm", { type: "audio/webm" })
+  form.set("file", file)
+
+  const resp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${OPENAI_KEY}` },
+    body: form,
+  })
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "Unknown ASR error")
+    return NextResponse.json({ ok: false, error: errText }, { status: 500 })
+  }
+
+  const data = await resp.json()
+  const text: string = data?.text || ""
+  return NextResponse.json({ ok: true, text })
+} catch (e: any) {
+  return NextResponse.json({ ok: false, error: e?.message || "Unknown error" }, { status: 500 })
+}
+}
+
+// components/call-guard.tsx
+import React, { useEffect, useRef, useState } from "react"
+import { Badge, Label, Switch } from "@radix-ui/react-dropdown-menu"
+import { Waveform } from "components/waveform"
+import { detectLanguageCode } from "utils/language-detection"
+import { analyzeTextWindow } from "utils/text-analysis"
+import { maybeServerClassify } from "utils/server-classification"
+
+const CallGuard = () => {
+const [remoteAsrAvailable, setRemoteAsrAvailable] = useState<boolean>(false)
+const [remoteTranscript, setRemoteTranscript] = useState<string>("")
+const [autoDetectedLang, setAutoDetectedLang] = useState<string | null>(null)
+const [isMonitoring, setIsMonitoring] = useState<boolean>(true)
+const remoteStreamRef = useRef<MediaStream | null>(null)
+const remoteRecorderRef = useRef<MediaRecorder | null>(null)
+const remoteAsrBusyRef = useRef<boolean>(false)
+const [mounted, setMounted] = useState<boolean>(false)
+const currentLang = "en"
+
+useEffect(() => {
+  setMounted(true)
+  return () => setMounted(false)
+}, [])
+
+useEffect(() => {
+  async function probeRemoteAsrAvailability() {
+    try {
+      const res = await fetch("/api/remote-asr", { method: "OPTIONS" })
+      if (!mounted) return
+      setRemoteAsrAvailable(res.ok)
+    } catch {
+      if (mounted) {
+        setRemoteAsrAvailable(false)
+      }
+    }
+  }
+  probeRemoteAsrAvailability()
+}, [mounted])
+
+function startRemoteAsrIfNeeded() {
+  if (!isMonitoring) return
+  if (remoteAsrAvailable === false) return
+  const rs = remoteStreamRef.current
+  if (!rs) return
+  if (!rs.getAudioTracks().length) return
+  if (remoteRecorderRef.current) return
+
+  try {
+    const mime =
+      typeof MediaRecorder.isTypeSupported === "function" &&
+      MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : "audio/webm"
+    const rec = new MediaRecorder(rs, { mimeType: mime, audioBitsPerSecond: 32000 })
+    rec.ondataavailable = async (ev) => {
+      const blob = ev.data
+      if (!blob || blob.size < 1024) return
+      if (remoteAsrBusyRef.current) return
+      remoteAsrBusyRef.current = true
+      try {
+        const url = `/api/remote-asr?lang=${encodeURIComponent(currentLang)}`
+        const res = await fetch(url, { method: "POST", body: blob })
+        const data = await res.json().catch(() => null)
+        if (data?.ok && data.text) {
+          setRemoteTranscript((prev) => {
+            const next = (prev + " " + data.text).trim()
+            if (currentLang === "auto") {
+              const det = detectLanguageCode((remoteTranscript + " " + next).trim())
+              if (det) setAutoDetectedLang(det)
+            }
+            analyzeTextWindow(remoteTranscript, next)
+            maybeServerClassify((remoteTranscript + " " + next).slice(-1800))
+            return next
+          })
+        }
+      } catch {
+        // ignore chunk errors
+      } finally {
+        remoteAsrBusyRef.current = false
+      }
+    }
+    rec.start(4000)
+    remoteRecorderRef.current = rec
+  } catch {
+    // silently ignore
+  }
+}
+
+const remoteAsrActive = remoteAsrAvailable !== false && Boolean(remoteStreamRef.current)
+
+return (
+  <div className="flex flex-col items-center justify-center min-h-screen">
+    <div className="flex items-center gap-2">
+      <Label className="text-sm flex items-center gap-1">
+        <Waveform className="h-4 w-4" />
+        Caller transcription
+      </Label>
+      <Badge variant={remoteAsrActive ? "outline" : "secondary"}>
+        {remoteAsrActive ? "ON" : "OFF"}
+      </Badge>
+    </div>
+    {remoteAsrActive === false && (
+      <div className="mt-4">
+        <span className="text-xs font-medium">The Shield</span>
+      </div>
+    )}
+  </div>
+)
+}
+
+export default CallGuard

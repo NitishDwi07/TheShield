@@ -1,0 +1,89 @@
+// app/page.tsx
+import React from 'react';
+import CallGuard from '../components/call-guard';
+import WebRTCDemo from '../components/webrtc-demo';
+
+const HomePage = () => {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen">
+      <h1 className="text-4xl font-bold">The Shield</h1>
+      <p className="text-sm mt-1 bg-gradient-to-r from-emerald-600 via-amber-500 to-rose-500 bg-clip-text text-transparent animate-pulse">
+        Real-time scam intent and synthetic voice detection during phone or video calls.
+      </p>
+      <CallGuard />
+      <div className="mt-6 text-xs text-muted-foreground flex items-center justify-center gap-5">
+        <a href="/privacy" className="hover:underline">Privacy</a>
+        <a href="/terms" className="hover:underline">Terms</a>
+        <a href="/contact" className="hover:underline">Contact us</a>
+      </div>
+    </div>
+  );
+};
+
+export default HomePage;
+
+// components/call-guard.tsx
+import React from 'react';
+
+const CallGuard = () => {
+  return (
+    <div className="fixed bottom-4 right-4 bg-blue-500 p-2 rounded-lg">
+      <span className="text-xs font-medium">The Shield</span>
+    </div>
+  );
+};
+
+export default CallGuard;
+
+// components/webrtc-demo.tsx
+import React from 'react';
+import { Card, CardTitle } from './card';
+
+const WebRTCDemo = () => {
+  return (
+    <Card>
+      <CardTitle>The Shield</CardTitle>
+      <div className="p-4">
+        {/* WebRTC demo content here */}
+      </div>
+    </Card>
+  );
+};
+
+export default WebRTCDemo;
+
+// app/live/page.tsx
+import React from 'react';
+import WebRTCDemo from '../components/webrtc-demo';
+
+const LivePage = () => {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen">
+      <h1 className="text-4xl font-bold">Live Demo</h1>
+      <p className="mt-4 text-lg">
+        This live demo shows how The Shield can be integrated into your application to detect scam intent and synthetic voices during phone or video calls.
+      </p>
+      <WebRTCDemo />
+    </div>
+  );
+};
+
+export default LivePage;
+
+// lib/report.ts
+const generateReport = (data) => {
+  const lines = [];
+  lines.push(`# The Shield Report`);
+  lines.push(`## Summary`);
+  lines.push(`The Shield detected ${data.scamCount} potential scam calls.`);
+  lines.push(`## Details`);
+  data.calls.forEach((call, index) => {
+    lines.push(`### Call ${index + 1}`);
+    lines.push(`- Duration: ${call.duration} seconds`);
+    lines.push(`- Scam Intent Detected: ${call.scamIntentDetected}`);
+    lines.push(`- Synthetic Voice Detected: ${call.syntheticVoiceDetected}`);
+  });
+  return lines.join('\n');
+};
+
+export default generateReport;

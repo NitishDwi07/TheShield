@@ -1,0 +1,85 @@
+// app/page.tsx
+import React from 'react';
+import { Card, CardHeader, CardTitle } from './components/card';
+import { downloadReport } from './lib/report';
+import { CallGuard } from './components/call-guard';
+import { WebRTCDemo } from './components/webrtc-demo';
+
+const Page = () => {
+  return (
+    <div>
+      <h1 className="text-2xl font-semibold tracking-tight">The Shield</h1>
+      <CallGuard />
+      <WebRTCDemo />
+    </div>
+  );
+};
+
+export default Page;
+
+// components/call-guard.tsx
+import React from 'react';
+
+const CallGuard = () => {
+  const downloadReport = () => {
+    const ts = new Date().toISOString();
+    const md = `# The Shield Report\n\nThis is a sample report.`;
+    downloadText(`the-shield-report-${ts}.md`, md);
+  };
+
+  return (
+    <div>
+      <span className="text-xs font-medium">The Shield</span>
+      <button onClick={downloadReport}>Download Report</button>
+    </div>
+  );
+};
+
+export default CallGuard;
+
+// lib/report.ts
+export const downloadText = (filename: string, text: string) => {
+  const element = document.createElement('a');
+  element.setAttribute('href', `data:text/plain;charset=utf-8,${encodeURIComponent(text)}`);
+  element.setAttribute('download', filename);
+  element.style.display = 'none';
+  document.body.appendChild(element);
+  element.click();
+  document.body.removeChild(element);
+};
+
+// components/webrtc-demo.tsx
+import React from 'react';
+import { Card, CardHeader, CardTitle } from './card';
+
+const WebRTCDemo = () => {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>The Shield</CardTitle>
+      </CardHeader>
+      <div>
+        {/* WebRTC demo implementation here */}
+      </div>
+    </Card>
+  );
+};
+
+export default WebRTCDemo;
+
+// app/live/page.tsx
+import React from 'react';
+
+const LivePage = () => {
+  return (
+    <div>
+      <p>
+        This example passes the remote audio stream into The Shield, and shows how to
+        auto-mute, discreetly alert, whisper a coach prompt, and hang up on high risk. If your server classifier is
+        configured, it will be used automatically for improved accuracy [^1].
+      </p>
+    </div>
+  );
+};
+
+export default LivePage;
