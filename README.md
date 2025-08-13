@@ -1,5 +1,5 @@
 # TheShield 🛡️
-
+ 
 A modern, real-time scam call detection and reporting platform leveraging AI-powered speech and text analysis with a full-stack web application for individuals and organizations.
 
 ## 🎯 Overview
